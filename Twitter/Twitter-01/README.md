@@ -1,1 +1,1 @@
-retrieve tweets using the search API
+retrieve tweets using the Twitter Search API
