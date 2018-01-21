@@ -18,27 +18,12 @@ import tweepy
 from Storage import Storage
 from FrenchStemmer import FrenchStemmer
 
+from creds import get_tweepy_api
+
 
 # Tweepy documentation
 # http://docs.tweepy.org/en/v3.5.0/
 # https://media.readthedocs.org/pdf/tweepy/latest/tweepy.pdf
-
-
-def get_tweepy_api():
-    """return tweepy api object with proper authentication"""
-
-    consumer_key = ''
-    consumer_secret = ''
-
-    access_token = ''
-    access_token_secret = ''
-
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    auth.set_access_token(access_token, access_token_secret)
-
-    api = tweepy.API(auth_handler=auth, wait_on_rate_limit=False, wait_on_rate_limit_notify=False)
-
-    return api
 
 
 def search_tweet_backward_single_request(api, output_storage, max_id=None):
@@ -215,6 +200,80 @@ def extract_core_text(api, input_storage, output_storage):
         output_file.close()
 
 
+
+def extract_user(api, input_storage, output_storage):
+    remaining_size = 0
+    output_data_file = None
+
+    for input_data_file in input_storage.get_all_data_files():
+        with input_data_file.open() as input_tweet_file:
+            for line in input_tweet_file:
+                obj = json.loads(line)
+                status = tweepy.ModelFactory.status.parse(api, obj)
+
+                user = status.user
+                if output_data_file is None:
+                    output_data_file, remaining_size = output_storage.get_current_data_file()
+                    output_file = output_data_file.open(mode='w')
+
+                remaining_size -= output_file.write(json.dumps(user._json))
+                remaining_size -= output_file.write('\n')
+
+                if remaining_size < 0:
+                    output_file.close()
+                    output_data_file = None
+
+    if output_data_file is not None:
+        output_file.close()
+
+
+def extract_user_urls(api, input_storage, output_storage):
+    remaining_size = 0
+    output_data_file = None
+
+
+    user = dict()
+    for input_data_file in input_storage.get_all_data_files():
+        with input_data_file.open() as input_tweet_file:
+            for line in input_tweet_file:
+                obj = json.loads(line)
+
+                user.clear()
+                user['id_str'] = obj['id_str']
+                user['name'] = obj['name']
+                user['screen_name'] = obj['screen_name']
+
+                if obj['url'] is not None:
+                    user['expanded_url'] = obj['entities']['url']['urls'][0]['expanded_url']
+                else:
+                    user['expanded_url'] = ''
+
+                if obj['default_profile_image']:
+                    user['profile_image_url'] = ''
+                else:
+                    user['profile_image_url'] = obj['profile_image_url']
+
+                if 'profile_banner_url' in obj and obj['profile_banner_url'] is not None:
+                    user['profile_banner_url'] = obj['profile_banner_url']
+                else:
+                    user['profile_image_url'] = ''
+
+
+                if output_data_file is None:
+                    output_data_file, remaining_size = output_storage.get_current_data_file()
+                    output_file = output_data_file.open(mode='w')
+
+                remaining_size -= output_file.write(json.dumps(user))
+                remaining_size -= output_file.write('\n')
+
+                if remaining_size < 0:
+                    output_file.close()
+                    output_data_file = None
+
+    if output_data_file is not None:
+        output_file.close()
+
+
 def get_vocabulary(input_storage):
     vocabulary = dict()
 
@@ -273,6 +332,24 @@ def main():
         # process the entire data set, make sure output is empty first
         if output_storage.is_empty():
             drop_retweet(api, input_storage, output_storage)
+        else:
+            print("ERROR output data set not empty {}".format(output_storage.data_set_dir))
+
+    if False:
+        input_storage = Storage('dataset-01-01', 'tweet-01-01')
+        output_storage = Storage('user-01-01', 'user-01-01')
+        # process the entire data set, make sure output is empty first
+        if output_storage.is_empty():
+            extract_user(api, input_storage, output_storage)
+        else:
+            print("ERROR output data set not empty {}".format(output_storage.data_set_dir))
+
+    if True:
+        input_storage = Storage('user-01-01', 'user-01-01')
+        output_storage = Storage('user-01-02', 'user-01-02')
+        # process the entire data set, make sure output is empty first
+        if output_storage.is_empty():
+            extract_user_urls(api, input_storage, output_storage)
         else:
             print("ERROR output data set not empty {}".format(output_storage.data_set_dir))
 
