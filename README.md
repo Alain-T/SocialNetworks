@@ -1,1 +1,1 @@
-My social network experiments
+My social network projects and experiments
